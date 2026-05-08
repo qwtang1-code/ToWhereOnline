@@ -1,60 +1,82 @@
-
 import React from 'react';
 import { useEnergy } from '../../context/EnergyContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const COLORS = ['#6BCB77', '#FFD93D', '#FF4B4B', '#4ECDC4', '#C7F464', '#FF6B6B', '#4D96FF'];
+const KEYWORD_CONFIG = [
+    { key: '蛤？这样不好吧', label: '蛤？这样不好吧（离谱程度）', color: '#e94560' },
+    { key: '狗又干啥了？', label: '狗又干啥了？（心情）', color: '#4ECDC4' },
+    { key: '咪在干嘛？', label: '咪在干嘛？（心情）', color: '#f9ca24' }
+];
 
 export default function GravityChart() {
     const { gravityScores, userInfo } = useEnergy();
 
-    // Transform data for Recharts
-    // Need format: [{ date: '2026-01-01', keyword1: 50, keyword2: 60 }, ...]
+    // 只取当前用户有的关键词
+    const chartKeywords = KEYWORD_CONFIG.filter(k => userInfo.keywords.includes(k.key));
 
-    // 1. Get all dates from the first keyword (assuming all have same dates)
-    const firstKw = userInfo.keywords[0];
+    if (chartKeywords.length === 0) {
+        return <div style={{ color: '#555', textAlign: 'center', padding: '40px' }}>暂无数据</div>;
+    }
+
+    const firstKw = chartKeywords[0].key;
     const history = gravityScores[firstKw] || [];
 
     const chartData = history.map((h, index) => {
         const row = { date: h.date };
-        userInfo.keywords.forEach(kw => {
-            const kwHistory = gravityScores[kw];
+        chartKeywords.forEach(({ key }) => {
+            const kwHistory = gravityScores[key];
             if (kwHistory && kwHistory[index]) {
-                row[kw] = kwHistory[index].score;
+                row[key] = kwHistory[index].score / 10;
             }
         });
         return row;
     });
 
+    // ===== 关键：必须包一层有高度的div，ResponsiveContainer才能正常工作 =====
     return (
-        <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                <XAxis
-                    dataKey="date"
-                    stroke="#888"
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(str) => str.slice(5)} // Show MM-DD
-                />
-                <YAxis stroke="#888" domain={[0, 100]} />
-                <Tooltip
-                    contentStyle={{ backgroundColor: '#050B14', border: '1px solid #444' }}
-                    itemStyle={{ color: '#fff' }}
-                    labelStyle={{ color: '#aaa' }}
-                />
-                <Legend />
-                {userInfo.keywords.map((kw, i) => (
-                    <Line
-                        key={kw}
-                        type="monotone"
-                        dataKey={kw}
-                        stroke={COLORS[i % COLORS.length]}
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 6 }}
+        <div style={{ width: '100%', height: '350px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                    <XAxis
+                        dataKey="date"
+                        stroke="#888"
+                        tick={{ fill: '#888', fontSize: 12 }}
+                        tickFormatter={(str) => str.slice(5)}
                     />
-                ))}
-            </LineChart>
-        </ResponsiveContainer>
+                    <YAxis
+                        stroke="#888"
+                        domain={[0, 10]}
+                        tick={{ fill: '#888', fontSize: 12 }}
+                    />
+                    <Tooltip
+                        contentStyle={{ backgroundColor: '#050B14', border: '1px solid #444' }}
+                        itemStyle={{ color: '#fff' }}
+                        labelStyle={{ color: '#aaa' }}
+                        formatter={(value, name) => {
+                            const cfg = KEYWORD_CONFIG.find(k => k.key === name);
+                            return [`${value}分`, cfg?.label || name];
+                        }}
+                    />
+                    <Legend
+                        formatter={(value) => {
+                            const cfg = KEYWORD_CONFIG.find(k => k.key === value);
+                            return cfg?.label || value;
+                        }}
+                    />
+                    {chartKeywords.map(({ key, color }) => (
+                        <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={color}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 6, fill: color }}
+                        />
+                    ))}
+                </LineChart>
+            </ResponsiveContainer>
+        </div>
     );
 }

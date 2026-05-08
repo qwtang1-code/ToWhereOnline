@@ -1,45 +1,98 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEnergy } from '../../context/EnergyContext';
+import { supabase } from '../../lib/supabaseClient';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
+import { getScoreColor } from '../../context/EnergyContext';
 
-const RATING_COLORS = {
-    high: '#6BCB77',
-    medium: '#FFD93D',
-    low: '#FF4B4B'
+const KEYWORD_LABELS = {
+    '蛤？这样不好吧': '离谱程度',
+    '狗又干啥了？': '心情',
+    '咪在干嘛？': '心情',
+    '我们的日常': null
 };
 
-const RATING_LABELS = {
-    high: 'HIGH',
-    medium: 'MED',
-    low: 'LOW'
+const KEYWORD_PLACEHOLDERS = {
+    '蛤？这样不好吧': '羞羞o(*////▽////*)q',
+    '狗又干啥了？': '毛孩子的日常',
+    '咪在干嘛？': '干啥呢喵',
+    '我们的日常': '相亲相爱一家人'
 };
 
 export default function CheckInPanel() {
-    const { userInfo, addCheckin } = useEnergy();
-    const [selections, setSelections] = useState({});
+    const { userInfo, addCheckin, currentUser } = useEnergy();
+    const [records, setRecords] = useState({});
     const [submitting, setSubmitting] = useState(false);
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-    const handleSelect = (keyword, quality) => {
-        setSelections(prev => ({
+    // 切换日期时，直接从数据库加载该日期的记录
+    useEffect(() => {
+        const loadRecords = async () => {
+            const { data } = await supabase
+                .from('checkins')
+                .select('*')
+                .eq('user_id', currentUser)
+                .eq('date', selectedDate);
+
+            const dayRecords = {};
+            data?.forEach(c => {
+                if (userInfo.keywords.includes(c.keyword)) {
+                    dayRecords[c.keyword] = {
+                        quality: c.quality || 0,
+                        note: c.note || ''
+                    };
+                }
+            });
+            setRecords(dayRecords);
+        };
+        loadRecords();
+    }, [selectedDate, currentUser, userInfo.keywords]);
+
+    const handleQualityChange = (keyword, value) => {
+        setRecords(prev => ({
             ...prev,
-            [keyword]: quality
+            [keyword]: { ...prev[keyword], quality: Number(value) }
+        }));
+    };
+
+    const handleNoteChange = (keyword, value) => {
+        setRecords(prev => ({
+            ...prev,
+            [keyword]: { ...prev[keyword], note: value }
         }));
     };
 
     const handleSubmit = async () => {
         setSubmitting(true);
-        const promises = Object.entries(selections).map(([kw, quality]) => {
-            return addCheckin(selectedDate, kw, quality);
-        });
+        // 逐个保存每个关键词的记录
+        for (const kw of userInfo.keywords) {
+            const data = records[kw];
+            if (!data) continue;
+            const quality = data.quality !== undefined ? data.quality : (data.note ? 5 : undefined);
+            if (quality === undefined) continue;
+            await addCheckin(selectedDate, kw, quality, data.note || '');
+        }
+        // 保存完成后，直接从数据库重新加载当前日期的记录
+        const { data: freshData } = await supabase
+            .from('checkins')
+            .select('*')
+            .eq('user_id', currentUser)
+            .eq('date', selectedDate);
 
-        await Promise.all(promises);
+        const dayRecords = {};
+        freshData?.forEach(c => {
+            if (userInfo.keywords.includes(c.keyword)) {
+                dayRecords[c.keyword] = {
+                    quality: c.quality || 0,
+                    note: c.note || ''
+                };
+            }
+        });
+        setRecords(dayRecords);
         setSubmitting(false);
-        setSelections({});
-        // Alert removed as requested
     };
+
+    const hasAnyInput = Object.values(records).some(r => r.quality !== undefined || r.note);
 
     return (
         <div style={{
@@ -49,15 +102,19 @@ export default function CheckInPanel() {
             backdropFilter: 'blur(10px)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
         }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
+            }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h2 style={{ margin: 0 }}>Inject Energy</h2>
+                    <h2 style={{ margin: 0 }}>每日记录</h2>
                     <input
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
                         max={format(new Date(), 'yyyy-MM-dd')}
-                        className="custom-date-picker"
                         style={{
                             background: 'rgba(255,255,255,0.1)',
                             border: '1px solid rgba(255,255,255,0.2)',
@@ -75,7 +132,7 @@ export default function CheckInPanel() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSubmit}
-                    disabled={submitting || Object.keys(selections).length === 0}
+                    disabled={submitting || !hasAnyInput}
                     style={{
                         background: submitting ? '#333' : '#4ECDC4',
                         color: submitting ? '#888' : '#000',
@@ -84,59 +141,116 @@ export default function CheckInPanel() {
                         fontSize: '16px',
                         fontWeight: 'bold',
                         borderRadius: '4px',
-                        cursor: submitting ? 'not-allowed' : 'pointer',
-                        boxShadow: submitting ? 'none' : '0 0 15px rgba(78, 205, 196, 0.4)'
+                        cursor: submitting || !hasAnyInput ? 'not-allowed' : 'pointer',
+                        boxShadow: submitting || !hasAnyInput ? 'none' : '0 0 15px rgba(78, 205, 196, 0.4)'
                     }}
                 >
-                    {submitting ? 'INJECTING...' : 'CONFIRM INJECTION'}
+                    {submitting ? '保存中...' : '保存记录'}
                 </motion.button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-                {userInfo.keywords.map(kw => (
-                    <div key={kw} style={{
-                        background: 'rgba(0,0,0,0.3)',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px'
-                    }}>
-                        <h3 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>{kw}</h3>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '20px'
+            }}>
+                {userInfo.keywords.map(kw => {
+                    const record = records[kw] || {};
+                    const score = record.quality || 0;
+                    const color = score > 0 ? getScoreColor(score) : 'rgba(255,255,255,0.1)';
+                    const scoreLabel = KEYWORD_LABELS[kw];
+                    const showScore = scoreLabel !== null;
 
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            {['high', 'medium', 'low'].map(q => {
-                                const isSelected = selections[kw] === q;
-                                const baseColor = RATING_COLORS[q];
+                    return (
+                        <div key={kw} style={{
+                            background: 'rgba(0,0,0,0.3)',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            border: `1px solid ${score > 0 ? color : 'rgba(255,255,255,0.05)'}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                        }}>
+                            <h3 style={{
+                                margin: 0,
+                                color: score > 0 ? color : '#fff',
+                                fontSize: '18px'
+                            }}>
+                                {kw}
+                            </h3>
 
-                                return (
-                                    <motion.button
-                                        key={q}
-                                        onClick={() => handleSelect(kw, q)}
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px 0',
-                                            border: `1px solid ${isSelected ? baseColor : 'rgba(255,255,255,0.1)'}`,
-                                            background: isSelected ? baseColor : 'transparent',
-                                            color: isSelected ? '#000' : baseColor,
-                                            cursor: 'pointer',
-                                            borderRadius: '4px',
+                            {showScore && (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <span style={{ fontSize: '12px', color: '#888', minWidth: '60px' }}>
+                                            {scoreLabel}
+                                        </span>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="10"
+                                            step="1"
+                                            value={score}
+                                            onChange={(e) => handleQualityChange(kw, e.target.value)}
+                                            style={{
+                                                flex: 1,
+                                                height: '6px',
+                                                cursor: 'pointer',
+                                                accentColor: color
+                                            }}
+                                        />
+                                        <span style={{
+                                            fontSize: '20px',
                                             fontWeight: 'bold',
-                                            fontSize: '12px',
-                                            textTransform: 'uppercase',
-                                            opacity: (selections[kw] && !isSelected) ? 0.3 : 1
-                                        }}
-                                    >
-                                        {RATING_LABELS[q]}
-                                    </motion.button>
-                                );
-                            })}
+                                            color: color,
+                                            minWidth: '30px',
+                                            textAlign: 'center'
+                                        }}>
+                                            {score}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        height: '4px',
+                                        borderRadius: '2px',
+                                        background: `linear-gradient(to right, ${getScoreColor(0)}, ${getScoreColor(5)}, ${getScoreColor(10)})`,
+                                        position: 'relative'
+                                    }}>
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: `${score * 10}%`,
+                                            top: '-3px',
+                                            width: '10px',
+                                            height: '10px',
+                                            borderRadius: '50%',
+                                            background: color,
+                                            transform: 'translateX(-50%)',
+                                            boxShadow: `0 0 8px ${color}`
+                                        }} />
+                                    </div>
+                                </>
+                            )}
+
+                            <textarea
+                                placeholder={KEYWORD_PLACEHOLDERS[kw] || `记录今天关于"${kw}"的趣事...`}
+                                value={record.note || ''}
+                                onChange={(e) => handleNoteChange(kw, e.target.value)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '6px',
+                                    color: '#fff',
+                                    padding: '10px',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    resize: 'vertical',
+                                    minHeight: '60px',
+                                    outline: 'none'
+                                }}
+                            />
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

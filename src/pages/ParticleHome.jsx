@@ -45,8 +45,8 @@ function ParticleSystem({ mousePos, voiceActive, gestureState }) {
       ctx.fillText('To Where ?', canvas.width / 2, canvas.height / 2 - 100);
 
       // 2. 一路向哪 往下挪一些，字号适度调整
-      ctx.font = 'bold 150px "CustomCuteFont", "YouYuan", "STHupo", sans-serif';
-      ctx.fillText('一路向哪', canvas.width / 2, canvas.height / 2 + 140);
+      ctx.font = 'bold 150px "Noto Serif SC", "SimSun", serif';
+      ctx.fillText('走哪儿去', canvas.width / 2, canvas.height / 2 + 140);
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       const textPoints = [];
