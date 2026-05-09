@@ -8,11 +8,11 @@ export default function CityDetail({ cityName, goBack }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentCity, setCurrentCity] = useState({ mainImage: '', description: '', gallery: [] });
+  const [currentCity, setCurrentCity] = useState({ id: null, mainImage: '', description: '', gallery: [] });
   const [isEditMode, setIsEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // 从 Supabase 加载城市数据
+  // 加载城市数据
   useEffect(() => {
     const loadCityData = async () => {
       setLoading(true);
@@ -24,20 +24,24 @@ export default function CityDetail({ cityName, goBack }) {
           .single();
 
         if (cityError || !cityData) {
+          console.error('加载城市失败:', cityError);
           setLoading(false);
           return;
         }
 
-        // 关键：从 city_images 表读取图片
-        const { data: imagesData, error: imagesError } = await supabase
+        console.log('城市数据:', cityData);
+
+        const { data: imagesData } = await supabase
           .from('city_images')
           .select('url, sort_order')
           .eq('city_id', cityData.id)
           .order('sort_order', { ascending: true });
 
+        console.log('图片数据:', imagesData);
+
         setCurrentCity({
           id: cityData.id,
-          mainImage: cityData.main_image,
+          mainImage: cityData.main_image || '',
           description: cityData.description || '',
           departure: cityData.departure || '',
           lng: cityData.lng,
@@ -62,32 +66,43 @@ export default function CityDetail({ cityName, goBack }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ========== 终极方案：base64 直接存数据库 ==========
+  // ========== 图片上传（base64 直接存数据库）==========
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
-    if (!file || !currentCity.id) return;
+    console.log('选中文件:', file?.name, '大小:', file?.size, 'city_id:', currentCity.id);
+
+    if (!file) {
+      alert('请选择文件');
+      return;
+    }
+    if (!currentCity.id) {
+      alert('城市ID为空，请刷新页面');
+      return;
+    }
 
     setUploading(true);
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      try {
-        const base64 = reader.result; // 直接就是 base64 字符串
+      const base64 = reader.result;
+      console.log('base64长度:', base64.length);
 
-        // 直接插入 city_images 表，不需要 Storage！
-        const { error } = await supabase
+      try {
+        const { data, error } = await supabase
           .from('city_images')
           .insert({
             city_id: currentCity.id,
-            url: base64,  // base64 直接存
+            url: base64,
             sort_order: currentCity.gallery.length
-          });
+          })
+          .select();
+
+        console.log('插入结果:', { data, error });
 
         if (error) {
           alert('保存失败：' + error.message);
-          console.error(error);
         } else {
-          // 刷新数据
+          alert('保存成功！');
           setCurrentCity(prev => ({
             ...prev,
             gallery: [...prev.gallery, base64]
@@ -95,9 +110,9 @@ export default function CityDetail({ cityName, goBack }) {
         }
       } catch (err) {
         alert('上传失败：' + err.message);
-      } finally {
-        setUploading(false);
+        console.error(err);
       }
+      setUploading(false);
     };
 
     reader.onerror = () => {
@@ -105,7 +120,7 @@ export default function CityDetail({ cityName, goBack }) {
       setUploading(false);
     };
 
-    reader.readAsDataURL(file); // 转成 base64 data URL
+    reader.readAsDataURL(file);
   };
   // ===================================================
 
@@ -123,17 +138,17 @@ export default function CityDetail({ cityName, goBack }) {
   };
 
   const showPreviousImage = () => {
-    const allImages = currentCity.gallery.length > 0 ? currentCity.gallery : [currentCity.mainImage];
-    const newIndex = currentImageIndex > 0 ? currentImageIndex - 1 : allImages.length - 1;
+    const all = currentCity.gallery;
+    const newIndex = currentImageIndex > 0 ? currentImageIndex - 1 : all.length - 1;
     setCurrentImageIndex(newIndex);
-    setSelectedImage(allImages[newIndex]);
+    setSelectedImage(all[newIndex]);
   };
 
   const showNextImage = () => {
-    const allImages = currentCity.gallery.length > 0 ? currentCity.gallery : [currentCity.mainImage];
-    const newIndex = currentImageIndex < allImages.length - 1 ? currentImageIndex + 1 : 0;
+    const all = currentCity.gallery;
+    const newIndex = currentImageIndex < all.length - 1 ? currentImageIndex + 1 : 0;
     setCurrentImageIndex(newIndex);
-    setSelectedImage(allImages[newIndex]);
+    setSelectedImage(all[newIndex]);
   };
 
   useEffect(() => {
@@ -185,7 +200,7 @@ export default function CityDetail({ cityName, goBack }) {
         </button>
       </div>
 
-      {/* 编辑模式：上传图片 */}
+      {/* 编辑面板 */}
       {isEditMode && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -222,7 +237,7 @@ export default function CityDetail({ cityName, goBack }) {
         </motion.div>
       )}
 
-      {/* 全屏主页面 */}
+      {/* 主页面 */}
       <div className="hero-section">
         <div
           className="hero-background"
@@ -257,7 +272,7 @@ export default function CityDetail({ cityName, goBack }) {
         </div>
       </div>
 
-      {/* 图片流区域 */}
+      {/* 图片画廊 */}
       <div className="gallery-section">
         <div className="gallery-container">
           <h2 className="gallery-title">精彩瞬间</h2>
@@ -278,7 +293,7 @@ export default function CityDetail({ cityName, goBack }) {
               ))
             ) : (
               <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '100px 0', color: '#999' }}>
-                {isEditMode ? '点击上方"选择图片上传"添加照片' : '照片都被藏起来了哦，自己去上传试试吧～'}
+                {isEditMode ? '点击上方添加照片' : '照片都被藏起来了哦，自己去上传试试吧～'}
               </div>
             )}
           </div>
@@ -287,63 +302,4 @@ export default function CityDetail({ cityName, goBack }) {
 
       {/* 图片查看器 */}
       {selectedImage && (
-        <div className="image-viewer-overlay" onClick={closeImageViewer}>
-          <div className="image-viewer-container" onClick={(e) => e.stopPropagation()}>
-            <button className="image-viewer-close" onClick={closeImageViewer}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-            <button className="image-viewer-nav prev" onClick={showPreviousImage}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-            <button className="image-viewer-nav next" onClick={showNextImage}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </button>
-            <img src={selectedImage} alt="查看" className="image-viewer-img" onError={handleImageError} />
-            <div className="image-viewer-counter">{currentImageIndex + 1} / {currentCity.gallery.length}</div>
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        .city-detail { width: 100%; height: 100%; overflow-y: auto; }
-        .hero-section { position: relative; width: 100vw; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        .hero-background { position: absolute; top: -20%; left: -20%; width: 140%; height: 140%; background-size: cover; background-position: center; background-repeat: no-repeat; background-image: linear-gradient(45deg, #1e3c72, #2a5298); cursor: pointer; }
-        .hero-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); }
-        .back-button { padding: 12px 24px; border-radius: 30px; border: none; font-size: 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        .back-button.dark { background: rgba(0,0,0,0.7); color: white; backdrop-filter: blur(10px); }
-        .back-button.dark:hover { background: rgba(0,0,0,0.9); transform: translateY(-2px); }
-        .back-button.light { background: rgba(255,255,255,0.9); color: black; backdrop-filter: blur(10px); }
-        .back-button.light:hover { background: rgba(255,255,255,1); }
-        .hero-content { position: relative; z-index: 5; text-align: center; color: white; max-width: 80%; display: flex; flex-direction: column; align-items: center; }
-        .city-name { font-size: clamp(3rem, 10vw, 6rem); font-weight: 800; margin: 0 0 20px 0; letter-spacing: -2px; text-shadow: 0 2px 20px rgba(0,0,0,0.5); }
-        .meta-item { font-size: 1.4rem; opacity: 0.9; font-weight: 300; letter-spacing: 1px; }
-        .scroll-indicator { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); color: white; text-align: center; z-index: 10; animation: bounce 2s infinite; }
-        .scroll-indicator span { display: block; margin-bottom: 8px; font-size: 14px; opacity: 0.8; }
-        @keyframes bounce { 0%,20%,50%,80%,100%{transform:translateX(-50%)translateY(0)}40%{transform:translateX(-50%)translateY(-10px)}60%{transform:translateX(-50%)translateY(-5px)} }
-        .gallery-section { background: white; padding: 80px 0; min-height: 100vh; }
-        .gallery-container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
-        .gallery-title { font-size: 3rem; text-align: center; margin-bottom: 60px; color: #333; }
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
-        .gallery-item { border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); transition: transform 0.3s; cursor: pointer; }
-        .gallery-item:hover { transform: translateY(-10px); }
-        .gallery-item img { width: 100%; height: 250px; object-fit: cover; display: block; transition: transform 0.3s; }
-        .gallery-item:hover img { transform: scale(1.05); }
-        .image-viewer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-        .image-viewer-container { position: relative; max-width: 90vw; max-height: 90vh; }
-        .image-viewer-img { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
-        .image-viewer-close { position: absolute; top: -50px; right: 0; background: rgba(255,255,255,0.2); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .image-viewer-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; color: white; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .image-viewer-nav.prev { left: -70px; }
-        .image-viewer-nav.next { right: -70px; }
-        .image-viewer-counter { position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); color: white; font-size: 14px; }
-        @media (max-width: 768px) { .gallery-grid { grid-template-columns: 1fr; } .gallery-container { padding: 0 20px; } .image-viewer-nav.prev { left: 10px; } .image-viewer-nav.next { right: 10px; } }
-      `}</style>
-    </div>
-  );
-}
+        <div className="
