@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabaseClient';
+import { uploadToSupabase } from '../lib/supabaseStorage';  // ← 直接导入
 
 export default function CityDetail({ cityName, goBack }) {
+  // ... 其他 state 不变 ...
   const [scrollY, setScrollY] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -12,6 +14,7 @@ export default function CityDetail({ cityName, goBack }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // loadCityData useEffect 不变
   useEffect(() => {
     const loadCityData = async () => {
       setLoading(true);
@@ -53,6 +56,7 @@ export default function CityDetail({ cityName, goBack }) {
     if (cityName) loadCityData();
   }, [cityName]);
 
+  // scroll useEffect 不变
   useEffect(() => {
     const handleScroll = () => {
       setScrollY(window.scrollY);
@@ -62,6 +66,7 @@ export default function CityDetail({ cityName, goBack }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // ========== 关键修复：直接用 uploadToSupabase，去掉动态导入 ==========
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) {
@@ -75,7 +80,6 @@ export default function CityDetail({ cityName, goBack }) {
 
     setUploading(true);
     try {
-      const { uploadToSupabase } = await import('../../lib/supabaseStorage');
       const { publicUrl } = await uploadToSupabase(file, 'firsts-images');
       
       const { error } = await supabase
@@ -101,6 +105,7 @@ export default function CityDetail({ cityName, goBack }) {
     }
     setUploading(false);
   };
+  // =====================================================================
 
   const handleImageError = (e) => { e.target.style.display = 'none'; };
 
