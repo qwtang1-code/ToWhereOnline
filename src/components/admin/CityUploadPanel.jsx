@@ -223,29 +223,29 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <div className={styles.field}>
                         <label>城市名称</label>
-                        <input type="text" value={cityName} onChange={e => setCityName(e.target.value)} placeholder="如：台北" required />
+                        <input type="text" className={styles.fieldText} value={cityName} onChange={e => setCityName(e.target.value)} placeholder="如：台北" required />
                     </div>
                     <div className={styles.row}>
                         <div className={styles.field}>
                             <label>经度 (lng)</label>
-                            <input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} placeholder="121.5654" required />
+                            <input type="number" className={styles.fieldNumber} step="any" value={lng} onChange={e => setLng(e.target.value)} placeholder="121.5654" required />
                         </div>
                         <div className={styles.field}>
                             <label>纬度 (lat)</label>
-                            <input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="25.0330" required />
+                            <input type="number" className={styles.fieldNumber} step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="25.0330" required />
                         </div>
                     </div>
                     <div className={styles.field}>
                         <label>访问日期</label>
-                        <input type="text" value={visitDate} onChange={e => setVisitDate(e.target.value)} placeholder="2024-01-01" />
+                        <input type="text" className={styles.fieldText} value={visitDate} onChange={e => setVisitDate(e.target.value)} placeholder="2024-01-01" />
                     </div>
                     <div className={styles.field}>
                         <label>出发地</label>
-                        <input type="text" value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
+                        <input type="text" className={styles.fieldText} value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
                     </div>
                     <div className={styles.field}>
                         <label>主图 / 地点照片</label>
-                        <input type="file" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
+                        <input type="file" className={styles.fieldFile} accept="image/*" onChange={handleFileChange} disabled={isUploading} />
                         {mainImage && <img src={mainImage} alt="preview" className={styles.preview} />}
                         <p style={{ fontSize: '12px', opacity: 0.65, margin: '8px 0 0' }}>
                             {editingCityId
