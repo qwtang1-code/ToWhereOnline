@@ -5,7 +5,6 @@ import { uploadToSupabase } from '../lib/supabaseStorage';
 import './CityDetail.css';
 
 export default function CityDetail({ cityName, goBack }) {
-  // ... 其他 state 不变 ...
   const [scrollY, setScrollY] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -15,7 +14,6 @@ export default function CityDetail({ cityName, goBack }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // loadCityData useEffect 不变
   useEffect(() => {
     const loadCityData = async () => {
       setLoading(true);
@@ -57,7 +55,6 @@ export default function CityDetail({ cityName, goBack }) {
     if (cityName) loadCityData();
   }, [cityName]);
 
-  // scroll useEffect 不变
   useEffect(() => {
     const handleScroll = () => {
       setScrollY(window.scrollY);
@@ -67,17 +64,10 @@ export default function CityDetail({ cityName, goBack }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ========== 关键修复：直接用 uploadToSupabase，去掉动态导入 ==========
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
-    if (!file) {
-      alert('请选择文件');
-      return;
-    }
-    if (!currentCity.id) {
-      alert('城市ID为空');
-      return;
-    }
+    if (!file) { alert('请选择文件'); return; }
+    if (!currentCity.id) { alert('城市ID为空'); return; }
 
     setUploading(true);
     try {
@@ -107,7 +97,6 @@ export default function CityDetail({ cityName, goBack }) {
     setUploading(false);
     event.target.value = '';
   };
-  // =====================================================================
 
   const handleImageError = (e) => { e.target.style.display = 'none'; };
 
@@ -233,7 +222,6 @@ export default function CityDetail({ cityName, goBack }) {
           }}
         />
         <div className="hero-overlay" />
-
         <motion.div
           className="hero-content"
           initial={{ opacity: 0, y: 50 }}
@@ -245,7 +233,6 @@ export default function CityDetail({ cityName, goBack }) {
             <div className="meta-item">{currentCity.description}</div>
           )}
         </motion.div>
-
         <div className="scroll-indicator">
           <span>向下滑动查看更多</span>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -304,7 +291,6 @@ export default function CityDetail({ cityName, goBack }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
