@@ -7,6 +7,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
     const [lat, setLat] = useState('');
     const [lng, setLng] = useState('');
     const [visitDate, setVisitDate] = useState('');
+    const [departure, setDeparture] = useState('');
     const [mainImage, setMainImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadMessage, setUploadMessage] = useState('');
@@ -21,7 +22,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
     const fetchCities = async () => {
         const { data, error } = await supabase
             .from('cities')
-            .select('id, name, lng, lat, color, sort_order')
+            .select('*')
             .order('sort_order', { ascending: true });
         if (!error && data) {
             setCities(data);
@@ -32,37 +33,76 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         if (!e.target.files || !e.target.files[0]) return;
         const file = e.target.files[0];
         const token = githubToken || '';
+        
+        console.log('Token前5位:', token.substring(0, 5));
+        console.log('Token长度:', token.length);
+        
         if (!token || !token.startsWith('ghp_')) {
-            setUploadMessage('请先配置 GitHub Token');
+            setUploadMessage('❌ Token格式不对，必须以ghp_开头');
             return;
         }
+        
         setIsUploading(true);
         setUploadMessage('正在上传到 GitHub...');
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64 = reader.result.split(',')[1];
-            const repo = 'towhere-images';
-            const owner = localStorage.getItem('githubOwner') || 'qwtang1-code';
-            const branch = localStorage.getItem('githubBranch') || 'main';
-            const path = `city-${Date.now()}-${file.name}`;
-            const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message: 'upload city image', content: base64, branch }),
-            });
-            if (res.ok) {
-                const json = await res.json();
-                setMainImage(json.content.download_url);
-                setUploadMessage('图片上传成功！');
-            } else {
-                setUploadMessage('图片上传失败');
-            }
+        
+        try {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    const base64 = reader.result.split(',')[1];
+                    const repo = 'towhere-images';
+                    const owner = 'qwtang1-code';
+                    const branch = 'main';
+                    const path = `city-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
+                    
+                    console.log('上传路径:', path);
+                    
+                    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        body: JSON.stringify({ 
+                            message: 'upload city image', 
+                            content: base64, 
+                            branch 
+                        }),
+                    });
+                    
+                    console.log('GitHub响应状态:', res.status);
+                    
+                    if (res.ok) {
+                        const json = await res.json();
+                        console.log('上传成功:', json.content.download_url);
+                        setMainImage(json.content.download_url);
+                        setUploadMessage('✅ 图片上传成功！');
+                    } else {
+                        const errorText = await res.text();
+                        console.error('GitHub错误:', errorText);
+                        if (res.status === 401) {
+                            setUploadMessage('❌ Token无效或已过期，请重新创建');
+                        } else if (res.status === 404) {
+                            setUploadMessage('❌ 仓库不存在，请检查 towhere-images 仓库');
+                        } else if (res.status === 403) {
+                            setUploadMessage('❌ Token权限不足，请勾选repo权限');
+                        } else {
+                            setUploadMessage(`❌ 上传失败(${res.status})`);
+                        }
+                    }
+                } catch (err) {
+                    console.error('上传异常:', err);
+                    setUploadMessage('❌ 网络错误，GitHub API访问失败');
+                }
+                setIsUploading(false);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error('文件读取错误:', err);
+            setUploadMessage('❌ 文件读取失败');
             setIsUploading(false);
-        };
-        reader.readAsDataURL(file);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -79,6 +119,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
             main_image: mainImage,
             lng: parseFloat(lng),
             lat: parseFloat(lat),
+            departure: departure.trim() || null,
         };
 
         let result;
@@ -92,7 +133,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
             setUploadMessage('保存失败：' + result.error.message);
         } else {
             setUploadMessage(editingCityId ? '城市更新成功！' : '城市添加成功！');
-            setCityName(''); setLat(''); setLng(''); setVisitDate(''); setMainImage(null);
+            setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null);
             setEditingCityId(null);
             fetchCities();
             if (onCityCreated) onCityCreated();
@@ -106,6 +147,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         setLng(city.lng || '');
         setLat(city.lat || '');
         setVisitDate(city.description || '');
+        setDeparture(city.departure || '');
         setMainImage(city.main_image || null);
         setIsPanelOpen(true);
     };
@@ -145,6 +187,10 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                         <input type="text" value={visitDate} onChange={e => setVisitDate(e.target.value)} placeholder="2024-01-01" />
                     </div>
                     <div className={styles.field}>
+                        <label>出发地</label>
+                        <input type="text" value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
+                    </div>
+                    <div className={styles.field}>
                         <label>主图</label>
                         <input type="file" accept="image/*" onChange={handleFileChange} />
                         {mainImage && <img src={mainImage} alt="preview" className={styles.preview} />}
@@ -156,7 +202,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                         {isUploading ? '保存中...' : (editingCityId ? '更新城市' : '添加城市')}
                     </button>
                     {editingCityId && (
-                        <button type="button" onClick={() => { setEditingCityId(null); setCityName(''); setLat(''); setLng(''); setVisitDate(''); setMainImage(null); }} className={styles.cancelBtn}>
+                        <button type="button" onClick={() => { setEditingCityId(null); setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null); }} className={styles.cancelBtn}>
                             取消编辑
                         </button>
                     )}
