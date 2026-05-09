@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/((?!assets|cesium|images|music|video|fonts|.*\\..*).*)", "destination": "/index.html" }
+  ]
+}
