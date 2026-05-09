@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadToSupabase } from '../../lib/supabaseStorage';
-import styles from './CityUploadPanel.module.css';
+import './CityUploadPanel.css';
 
-export default function CityUploadPanel({ onCityCreated, githubToken }) {
+export default function CityUploadPanel({ onBack, onCityCreated }) {
     const [cityName, setCityName] = useState('');
     const [lat, setLat] = useState('');
     const [lng, setLng] = useState('');
@@ -213,40 +213,47 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
     };
 
     return (
-        <div className={styles.panel}>
-            <div className={styles.header} onClick={() => setIsPanelOpen(!isPanelOpen)}>
+        <div className="tw-cup-panel">
+            {onBack && (
+                <div className="tw-cup-topbar">
+                    <button type="button" className="tw-cup-navBack" onClick={onBack}>
+                        关闭
+                    </button>
+                </div>
+            )}
+            <div className="tw-cup-header" onClick={() => setIsPanelOpen(!isPanelOpen)}>
                 <h3>{editingCityId ? '编辑城市' : '添加新城市'}</h3>
                 <span>{isPanelOpen ? '▲' : '▼'}</span>
             </div>
 
             {isPanelOpen && (
-                <form onSubmit={handleSubmit} className={styles.form}>
-                    <div className={styles.field}>
+                <form onSubmit={handleSubmit} className="tw-cup-form">
+                    <div className="tw-cup-field">
                         <label>城市名称</label>
-                        <input type="text" className={styles.fieldText} value={cityName} onChange={e => setCityName(e.target.value)} placeholder="如：台北" required />
+                        <input type="text" className="tw-cup-fieldText" value={cityName} onChange={e => setCityName(e.target.value)} placeholder="如：台北" required />
                     </div>
-                    <div className={styles.row}>
-                        <div className={styles.field}>
+                    <div className="tw-cup-row">
+                        <div className="tw-cup-field">
                             <label>经度 (lng)</label>
-                            <input type="number" className={styles.fieldNumber} step="any" value={lng} onChange={e => setLng(e.target.value)} placeholder="121.5654" required />
+                            <input type="number" className="tw-cup-fieldNumber" step="any" value={lng} onChange={e => setLng(e.target.value)} placeholder="121.5654" required />
                         </div>
-                        <div className={styles.field}>
+                        <div className="tw-cup-field">
                             <label>纬度 (lat)</label>
-                            <input type="number" className={styles.fieldNumber} step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="25.0330" required />
+                            <input type="number" className="tw-cup-fieldNumber" step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="25.0330" required />
                         </div>
                     </div>
-                    <div className={styles.field}>
+                    <div className="tw-cup-field">
                         <label>访问日期</label>
-                        <input type="text" className={styles.fieldText} value={visitDate} onChange={e => setVisitDate(e.target.value)} placeholder="2024-01-01" />
+                        <input type="text" className="tw-cup-fieldText" value={visitDate} onChange={e => setVisitDate(e.target.value)} placeholder="2024-01-01" />
                     </div>
-                    <div className={styles.field}>
+                    <div className="tw-cup-field">
                         <label>出发地</label>
-                        <input type="text" className={styles.fieldText} value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
+                        <input type="text" className="tw-cup-fieldText" value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
                     </div>
-                    <div className={styles.field}>
+                    <div className="tw-cup-field">
                         <label>主图 / 地点照片</label>
-                        <input type="file" className={styles.fieldFile} accept="image/*" onChange={handleFileChange} disabled={isUploading} />
-                        {mainImage && <img src={mainImage} alt="preview" className={styles.preview} />}
+                        <input type="file" className="tw-cup-fieldFile" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
+                        {mainImage && <img src={mainImage} alt="preview" className="tw-cup-preview" />}
                         <p style={{ fontSize: '12px', opacity: 0.65, margin: '8px 0 0' }}>
                             {editingCityId
                                 ? '编辑模式下选图后会立即保存到数据库。'
@@ -254,27 +261,27 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                         </p>
                     </div>
 
-                    {uploadMessage && <div className={styles.message}>{uploadMessage}</div>}
+                    {uploadMessage && <div className="tw-cup-message">{uploadMessage}</div>}
 
-                    <button type="submit" disabled={isUploading} className={styles.submitBtn}>
+                    <button type="submit" disabled={isUploading} className="tw-cup-submitBtn">
                         {isUploading ? '保存中...' : (editingCityId ? '更新城市' : '添加城市')}
                     </button>
                     {editingCityId && (
-                        <button type="button" onClick={() => { setEditingCityId(null); setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null); }} className={styles.cancelBtn}>
+                        <button type="button" onClick={() => { setEditingCityId(null); setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null); }} className="tw-cup-cancelBtn">
                             取消编辑
                         </button>
                     )}
                 </form>
             )}
 
-            <div className={styles.cityList}>
+            <div className="tw-cup-cityList">
                 <h4>已有城市 ({cities.length})</h4>
                 {cities.map(city => (
-                    <div key={city.id} className={styles.cityItem}>
+                    <div key={city.id} className="tw-cup-cityItem">
                         <span>{city.name}</span>
                         <div>
-                            <button onClick={() => handleEditCity(city)} className={styles.editBtn}>编辑</button>
-                            <button onClick={() => handleDeleteCity(city.id)} className={styles.deleteBtn}>删除</button>
+                            <button onClick={() => handleEditCity(city)} className="tw-cup-editBtn">编辑</button>
+                            <button onClick={() => handleDeleteCity(city.id)} className="tw-cup-deleteBtn">删除</button>
                         </div>
                     </div>
                 ))}
