@@ -32,77 +32,21 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
     const handleFileChange = async (e) => {
         if (!e.target.files || !e.target.files[0]) return;
         const file = e.target.files[0];
-        const token = githubToken || '';
-        
-        console.log('Token前5位:', token.substring(0, 5));
-        console.log('Token长度:', token.length);
-        
-        if (!token || !token.startsWith('ghp_')) {
-            setUploadMessage('❌ Token格式不对，必须以ghp_开头');
-            return;
-        }
         
         setIsUploading(true);
-        setUploadMessage('正在上传到 GitHub...');
+        setUploadMessage('正在上传...');
         
         try {
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                try {
-                    const base64 = reader.result.split(',')[1];
-                    const repo = 'towhere-images';
-                    const owner = 'qwtang1-code';
-                    const branch = 'main';
-                    const path = `city-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
-                    
-                    console.log('上传路径:', path);
-                    
-                    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/vnd.github.v3+json'
-                        },
-                        body: JSON.stringify({ 
-                            message: 'upload city image', 
-                            content: base64, 
-                            branch 
-                        }),
-                    });
-                    
-                    console.log('GitHub响应状态:', res.status);
-                    
-                    if (res.ok) {
-                        const json = await res.json();
-                        console.log('上传成功:', json.content.download_url);
-                        setMainImage(json.content.download_url);
-                        setUploadMessage('✅ 图片上传成功！');
-                    } else {
-                        const errorText = await res.text();
-                        console.error('GitHub错误:', errorText);
-                        if (res.status === 401) {
-                            setUploadMessage('❌ Token无效或已过期，请重新创建');
-                        } else if (res.status === 404) {
-                            setUploadMessage('❌ 仓库不存在，请检查 towhere-images 仓库');
-                        } else if (res.status === 403) {
-                            setUploadMessage('❌ Token权限不足，请勾选repo权限');
-                        } else {
-                            setUploadMessage(`❌ 上传失败(${res.status})`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('上传异常:', err);
-                    setUploadMessage('❌ 网络错误，GitHub API访问失败');
-                }
-                setIsUploading(false);
-            };
-            reader.readAsDataURL(file);
+            const { uploadToSupabase } = await import('../../lib/supabaseStorage');
+            const { publicUrl } = await uploadToSupabase(file, 'firsts-images');
+            
+            setMainImage(publicUrl);
+            setUploadMessage('✅ 图片上传成功！');
         } catch (err) {
-            console.error('文件读取错误:', err);
-            setUploadMessage('❌ 文件读取失败');
-            setIsUploading(false);
+            console.error('上传失败:', err);
+            setUploadMessage('❌ 上传失败：' + err.message);
         }
+        setIsUploading(false);
     };
 
     const handleSubmit = async (e) => {
@@ -132,7 +76,7 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         if (result.error) {
             setUploadMessage('保存失败：' + result.error.message);
         } else {
-            // ========== 关键修复：同时把图片写入 city_images 表 ==========
+            // 同时写入 city_images 表
             if (mainImage) {
                 const cityId = editingCityId || result.data?.[0]?.id;
                 if (cityId) {
@@ -143,7 +87,6 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                     });
                 }
             }
-            // ==========================================================
             
             setUploadMessage(editingCityId ? '城市更新成功！' : '城市添加成功！');
             setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null);

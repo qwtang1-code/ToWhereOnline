@@ -33,12 +33,10 @@ export default function CityDetail({ cityName, goBack }) {
           .eq('city_id', cityData.id)
           .order('sort_order', { ascending: true });
 
-        // ========== 关键修复：把 main_image 也加入画廊 ==========
         const galleryUrls = (imagesData || []).map(img => img.url);
         if (cityData.main_image && !galleryUrls.includes(cityData.main_image)) {
             galleryUrls.unshift(cityData.main_image);
         }
-        // =======================================================
 
         setCurrentCity({
           id: cityData.id,
@@ -64,7 +62,7 @@ export default function CityDetail({ cityName, goBack }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleImageUpload = (event) => {
+  const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) {
       alert('请选择文件');
@@ -76,37 +74,32 @@ export default function CityDetail({ cityName, goBack }) {
     }
 
     setUploading(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result;
-      try {
-        const { error } = await supabase
-          .from('city_images')
-          .insert({
-            city_id: currentCity.id,
-            url: base64,
-            sort_order: currentCity.gallery.length
-          });
+    try {
+      const { uploadToSupabase } = await import('../../lib/supabaseStorage');
+      const { publicUrl } = await uploadToSupabase(file, 'firsts-images');
+      
+      const { error } = await supabase
+        .from('city_images')
+        .insert({
+          city_id: currentCity.id,
+          url: publicUrl,
+          sort_order: currentCity.gallery.length
+        });
 
-        if (error) {
-          alert('保存失败：' + error.message);
-        } else {
-          alert('保存成功！');
-          setCurrentCity(prev => ({
-            ...prev,
-            gallery: [...prev.gallery, base64]
-          }));
-        }
-      } catch (err) {
-        alert('上传失败：' + err.message);
+      if (error) {
+        alert('保存失败：' + error.message);
+      } else {
+        alert('保存成功！');
+        setCurrentCity(prev => ({
+          ...prev,
+          gallery: [...prev.gallery, publicUrl]
+        }));
       }
-      setUploading(false);
-    };
-    reader.onerror = () => {
-      alert('文件读取失败');
-      setUploading(false);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      alert('上传失败：' + err.message);
+      console.error(err);
+    }
+    setUploading(false);
   };
 
   const handleImageError = (e) => { e.target.style.display = 'none'; };
@@ -160,7 +153,6 @@ export default function CityDetail({ cityName, goBack }) {
 
   return (
     <div className="city-detail">
-      {/* 返回 + 编辑按钮 */}
       <div style={{ position: 'fixed', top: '30px', left: '30px', zIndex: 100, display: 'flex', gap: '10px' }}>
         <button className={`back-button ${isDarkMode ? 'dark' : 'light'}`} onClick={goBack}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -185,7 +177,6 @@ export default function CityDetail({ cityName, goBack }) {
         </button>
       </div>
 
-      {/* 编辑面板 */}
       {isEditMode && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -222,7 +213,6 @@ export default function CityDetail({ cityName, goBack }) {
         </motion.div>
       )}
 
-      {/* 主页面 */}
       <div className="hero-section">
         <div
           className="hero-background"
@@ -257,7 +247,6 @@ export default function CityDetail({ cityName, goBack }) {
         </div>
       </div>
 
-      {/* 图片画廊 */}
       <div className="gallery-section">
         <div className="gallery-container">
           <h2 className="gallery-title">精彩瞬间</h2>
@@ -285,7 +274,6 @@ export default function CityDetail({ cityName, goBack }) {
         </div>
       </div>
 
-      {/* 图片查看器 */}
       {selectedImage && (
         <div className="image-viewer-overlay" onClick={closeImageViewer}>
           <div className="image-viewer-container" onClick={(e) => e.stopPropagation()}>
