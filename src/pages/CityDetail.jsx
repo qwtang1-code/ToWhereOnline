@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabaseClient';
-import { uploadToSupabase } from '../lib/supabaseStorage';
 
 export default function CityDetail({ cityName, goBack }) {
   const [scrollY, setScrollY] = useState(0);
@@ -63,40 +62,52 @@ export default function CityDetail({ cityName, goBack }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 处理图片上传
-  const handleImageUpload = async (event) => {
+  // ========== 终极方案：base64 直接存数据库 ==========
+  const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (!file || !currentCity.id) return;
 
     setUploading(true);
-    try {
-      // 1. 上传到 Supabase Storage
-      const { publicUrl } = await uploadToSupabase(file, 'firsts-images');
 
-      // 2. 插入 city_images 表
-      const { error } = await supabase
-        .from('city_images')
-        .insert({
-          city_id: currentCity.id,
-          url: publicUrl,
-          sort_order: currentCity.gallery.length
-        });
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64 = reader.result; // 直接就是 base64 字符串
 
-      if (error) {
-        alert('保存到数据库失败：' + error.message);
-      } else {
-        // 刷新数据
-        setCurrentCity(prev => ({
-          ...prev,
-          gallery: [...prev.gallery, publicUrl]
-        }));
+        // 直接插入 city_images 表，不需要 Storage！
+        const { error } = await supabase
+          .from('city_images')
+          .insert({
+            city_id: currentCity.id,
+            url: base64,  // base64 直接存
+            sort_order: currentCity.gallery.length
+          });
+
+        if (error) {
+          alert('保存失败：' + error.message);
+          console.error(error);
+        } else {
+          // 刷新数据
+          setCurrentCity(prev => ({
+            ...prev,
+            gallery: [...prev.gallery, base64]
+          }));
+        }
+      } catch (err) {
+        alert('上传失败：' + err.message);
+      } finally {
+        setUploading(false);
       }
-    } catch (error) {
-      alert('上传失败：' + error.message);
-    } finally {
+    };
+
+    reader.onerror = () => {
+      alert('文件读取失败');
       setUploading(false);
-    }
+    };
+
+    reader.readAsDataURL(file); // 转成 base64 data URL
   };
+  // ===================================================
 
   const handleImageError = (e) => { e.target.style.display = 'none'; };
 
