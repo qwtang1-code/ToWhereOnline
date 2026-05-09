@@ -30,6 +30,26 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         }
     };
 
+    /** 保存后从数据库再读一次，避免接口无报错但实际未写入（RLS / 连错库等） */
+    const verifyCityInDb = async (cityId, expectedMainImage) => {
+        const { data, error } = await supabase
+            .from('cities')
+            .select('id, main_image')
+            .eq('id', cityId)
+            .maybeSingle();
+        if (error) return { ok: false, message: '保存后无法校验：' + error.message };
+        if (!data) return { ok: false, message: '保存后校验：数据库中查不到该城市（可能被 RLS 拦截或连到了空项目）' };
+        if (expectedMainImage && data.main_image !== expectedMainImage) {
+            const exp = String(expectedMainImage).slice(0, 64);
+            const act = data.main_image ? String(data.main_image).slice(0, 64) : '（空）';
+            return {
+                ok: false,
+                message: `保存后校验：主图与提交不一致。期望开头：${exp}… ；数据库中为：${act}…`,
+            };
+        }
+        return { ok: true };
+    };
+
     /** 若该城市尚无此 URL 的相册行，则插入一条并返回是否有写入 */
     const ensureCityImageRow = async (cityId, url) => {
         if (!cityId || !url) return { inserted: false, error: null };
@@ -83,6 +103,9 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                 const { inserted, error: imgErr } = await ensureCityImageRow(editingCityId, publicUrl);
                 if (imgErr) throw new Error('相册表写入失败：' + imgErr.message);
 
+                const v = await verifyCityInDb(editingCityId, publicUrl);
+                if (!v.ok) throw new Error(v.message);
+
                 setUploadMessage(
                     inserted
                         ? '✅ 图片已上传并写入数据库（详情页相册可见）'
@@ -107,16 +130,21 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         if (!lat || !lng) { setUploadMessage('请输入经纬度'); return; }
 
         setIsUploading(true);
-        setUploadMessage('正在保存...');
+        setUploadMessage('正在保存 (1/3)…');
 
         const cityPayload = {
             name: cityName.trim(),
             description: visitDate.trim() || null,
-            main_image: mainImage,
             lng: parseFloat(lng),
             lat: parseFloat(lat),
             departure: departure.trim() || null,
         };
+        // 编辑时若未选新图，不要传 main_image: null，否则可能把库里主图清空
+        if (mainImage) {
+            cityPayload.main_image = mainImage;
+        } else if (!editingCityId) {
+            cityPayload.main_image = '';
+        }
 
         let result;
         if (editingCityId) {
@@ -129,6 +157,8 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
             setUploadMessage('保存失败：' + result.error.message);
         } else {
             const cityId = editingCityId || result.data?.[0]?.id;
+            setUploadMessage('正在写入相册并校验 (2/3)…');
+
             if (mainImage && cityId) {
                 const { error: imgErr } = await ensureCityImageRow(cityId, mainImage);
                 if (imgErr) {
@@ -144,7 +174,18 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                 }
             }
 
-            setUploadMessage(editingCityId ? '城市更新成功！' : '城市添加成功！');
+            if (cityId && mainImage) {
+                const v = await verifyCityInDb(cityId, mainImage);
+                if (!v.ok) {
+                    setUploadMessage('❌ ' + v.message + ' 请打开浏览器 F12 → Network，看 supabase 请求是否红色失败。');
+                    setIsUploading(false);
+                    fetchCities();
+                    if (onCityCreated) onCityCreated();
+                    return;
+                }
+            }
+
+            setUploadMessage(editingCityId ? '城市更新成功！(3/3 已校验)' : '城市添加成功！(3/3 已校验)');
             setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null);
             setEditingCityId(null);
             fetchCities();
