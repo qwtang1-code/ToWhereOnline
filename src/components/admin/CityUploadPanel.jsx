@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { uploadToSupabase } from '../../lib/supabaseStorage';
 import styles from './CityUploadPanel.module.css';
 
 export default function CityUploadPanel({ onCityCreated, githubToken }) {
@@ -29,24 +30,75 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         }
     };
 
+    /** 若该城市尚无此 URL 的相册行，则插入一条并返回是否有写入 */
+    const ensureCityImageRow = async (cityId, url) => {
+        if (!cityId || !url) return { inserted: false, error: null };
+        const { data: existing, error: selErr } = await supabase
+            .from('city_images')
+            .select('id')
+            .eq('city_id', cityId)
+            .eq('url', url)
+            .maybeSingle();
+        if (selErr) return { inserted: false, error: selErr };
+        if (existing) return { inserted: false, error: null };
+
+        const { data: maxRows, error: maxErr } = await supabase
+            .from('city_images')
+            .select('sort_order')
+            .eq('city_id', cityId)
+            .order('sort_order', { ascending: false })
+            .limit(1);
+        if (maxErr) return { inserted: false, error: maxErr };
+        const nextSort = (maxRows?.[0]?.sort_order ?? -1) + 1;
+
+        const { error: insErr } = await supabase.from('city_images').insert({
+            city_id: cityId,
+            url,
+            sort_order: nextSort,
+        });
+        if (insErr) return { inserted: false, error: insErr };
+        return { inserted: true, error: null };
+    };
+
     const handleFileChange = async (e) => {
         if (!e.target.files || !e.target.files[0]) return;
         const file = e.target.files[0];
-        
+
         setIsUploading(true);
-        setUploadMessage('正在上传...');
-        
+        setUploadMessage('正在上传到云存储...');
+
         try {
-            const { uploadToSupabase } = await import('../../lib/supabaseStorage');
             const { publicUrl } = await uploadToSupabase(file, 'firsts-images');
-            
             setMainImage(publicUrl);
-            setUploadMessage('✅ 图片上传成功！');
+
+            // 正在编辑已有城市：选图后立即写入 cities + city_images，避免用户以为「上传成功」即已保存
+            if (editingCityId) {
+                setUploadMessage('正在写入数据库...');
+                const { error: cityErr } = await supabase
+                    .from('cities')
+                    .update({ main_image: publicUrl })
+                    .eq('id', editingCityId);
+                if (cityErr) throw new Error('主图未能保存：' + cityErr.message);
+
+                const { inserted, error: imgErr } = await ensureCityImageRow(editingCityId, publicUrl);
+                if (imgErr) throw new Error('相册表写入失败：' + imgErr.message);
+
+                setUploadMessage(
+                    inserted
+                        ? '✅ 图片已上传并写入数据库（详情页相册可见）'
+                        : '✅ 图片已上传；主图已更新（该图已在相册中存在）'
+                );
+                fetchCities();
+                if (onCityCreated) onCityCreated();
+            } else {
+                setUploadMessage('✅ 图片已上传到云端。请填写城市信息后点击「添加城市」，才会写入数据库。');
+            }
         } catch (err) {
             console.error('上传失败:', err);
-            setUploadMessage('❌ 上传失败：' + err.message);
+            setUploadMessage('❌ ' + (err.message || String(err)));
         }
         setIsUploading(false);
+        e.target.value = '';
     };
 
     const handleSubmit = async (e) => {
@@ -76,18 +128,22 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
         if (result.error) {
             setUploadMessage('保存失败：' + result.error.message);
         } else {
-            // 同时写入 city_images 表
-            if (mainImage) {
-                const cityId = editingCityId || result.data?.[0]?.id;
-                if (cityId) {
-                    await supabase.from('city_images').insert({
-                        city_id: cityId,
-                        url: mainImage,
-                        sort_order: 0
-                    });
+            const cityId = editingCityId || result.data?.[0]?.id;
+            if (mainImage && cityId) {
+                const { error: imgErr } = await ensureCityImageRow(cityId, mainImage);
+                if (imgErr) {
+                    setUploadMessage(
+                        (editingCityId ? '城市信息已更新，但' : '城市已添加，但') +
+                        '相册记录写入失败：' +
+                        imgErr.message
+                    );
+                    setIsUploading(false);
+                    fetchCities();
+                    if (onCityCreated) onCityCreated();
+                    return;
                 }
             }
-            
+
             setUploadMessage(editingCityId ? '城市更新成功！' : '城市添加成功！');
             setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null);
             setEditingCityId(null);
@@ -147,9 +203,14 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
                         <input type="text" value={departure} onChange={e => setDeparture(e.target.value)} placeholder="如：北京" />
                     </div>
                     <div className={styles.field}>
-                        <label>主图</label>
-                        <input type="file" accept="image/*" onChange={handleFileChange} />
+                        <label>主图 / 地点照片</label>
+                        <input type="file" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
                         {mainImage && <img src={mainImage} alt="preview" className={styles.preview} />}
+                        <p style={{ fontSize: '12px', opacity: 0.65, margin: '8px 0 0' }}>
+                            {editingCityId
+                                ? '编辑模式下选图后会立即保存到数据库。'
+                                : '新城市需在填写经纬度等信息后点击「添加城市」，照片才会一并入库。'}
+                        </p>
                     </div>
 
                     {uploadMessage && <div className={styles.message}>{uploadMessage}</div>}

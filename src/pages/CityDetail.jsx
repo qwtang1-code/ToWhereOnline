@@ -104,6 +104,7 @@ export default function CityDetail({ cityName, goBack }) {
       console.error(err);
     }
     setUploading(false);
+    event.target.value = '';
   };
   // =====================================================================
 
