@@ -25,7 +25,7 @@ export default function CheckInPanel() {
     const [submitting, setSubmitting] = useState(false);
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-    // 切换日期时，直接从数据库加载该日期的记录
+    // 切换日期时，直接从数据库加载该日期的记录（修复：包含 image_url）
     useEffect(() => {
         const loadRecords = async () => {
             const { data } = await supabase
@@ -39,7 +39,8 @@ export default function CheckInPanel() {
                 if (userInfo.keywords.includes(c.keyword)) {
                     dayRecords[c.keyword] = {
                         quality: c.quality || 0,
-                        note: c.note || ''
+                        note: c.note || '',
+                        imageUrl: c.image_url || ''   // ← 修复1：加载时读取 image_url
                     };
                 }
             });
@@ -62,17 +63,25 @@ export default function CheckInPanel() {
         }));
     };
 
+    // ← 修复2：新增图片链接处理
+    const handleImageUrlChange = (keyword, value) => {
+        setRecords(prev => ({
+            ...prev,
+            [keyword]: { ...prev[keyword], imageUrl: value }
+        }));
+    };
+
     const handleSubmit = async () => {
         setSubmitting(true);
-        // 逐个保存每个关键词的记录
+        // 逐个保存每个关键词的记录（修复3：传入 imageUrl）
         for (const kw of userInfo.keywords) {
             const data = records[kw];
             if (!data) continue;
             const quality = data.quality !== undefined ? data.quality : (data.note ? 5 : undefined);
             if (quality === undefined) continue;
-            await addCheckin(selectedDate, kw, quality, data.note || '');
+            await addCheckin(selectedDate, kw, quality, data.note || '', data.imageUrl || '');   // ← 修复3
         }
-        // 保存完成后，直接从数据库重新加载当前日期的记录
+        // 保存完成后，直接从数据库重新加载当前日期的记录（修复4：包含 image_url）
         const { data: freshData } = await supabase
             .from('checkins')
             .select('*')
@@ -84,7 +93,8 @@ export default function CheckInPanel() {
             if (userInfo.keywords.includes(c.keyword)) {
                 dayRecords[c.keyword] = {
                     quality: c.quality || 0,
-                    note: c.note || ''
+                    note: c.note || '',
+                    imageUrl: c.image_url || ''   // ← 修复4
                 };
             }
         });
@@ -248,6 +258,41 @@ export default function CheckInPanel() {
                                     outline: 'none'
                                 }}
                             />
+
+                            {/* ← 修复5：新增图片链接输入框和预览 */}
+                            <input
+                                type="text"
+                                placeholder="粘贴图片链接（可选）..."
+                                value={record.imageUrl || ''}
+                                onChange={(e) => handleImageUrlChange(kw, e.target.value)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '6px',
+                                    color: '#fff',
+                                    padding: '8px 10px',
+                                    fontSize: '13px',
+                                    fontFamily: 'inherit',
+                                    outline: 'none',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                            {record.imageUrl && (
+                                <div style={{
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    maxHeight: '120px',
+                                    border: '1px solid rgba(255,255,255,0.1)'
+                                }}>
+                                    <img
+                                        src={record.imageUrl}
+                                        alt="预览"
+                                        style={{ width: '100%', maxHeight: '120px', objectFit: 'cover', display: 'block' }}
+                                        onError={e => { e.target.style.display = 'none'; }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     );
                 })}
