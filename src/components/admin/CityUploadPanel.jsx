@@ -29,9 +29,9 @@ export default function CityUploadPanel({ onBack, onCityCreated }) {
     const fetchCities = useCallback(async () => {
         setLoadingList(true);
         const { data, error } = await supabase
-            .from('cities')
-            .select('*')
-            .order('sort_order', { ascending: true });
+    .from('cities')
+    .select('id, name, lng, lat, color, sort_order')
+    .order('sort_order', { ascending: true });
         if (!error && data) setCityList(data);
         setLoadingList(false);
     }, []);
