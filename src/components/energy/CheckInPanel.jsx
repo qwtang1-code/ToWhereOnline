@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useEnergy } from '../../context/EnergyContext';
+import { useEnergy, getScoreColor } from '../../context/EnergyContext';
 import { supabase } from '../../lib/supabaseClient';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import { getScoreColor } from '../../context/EnergyContext';
 
 const KEYWORD_LABELS = {
     '蛤？这样不好吧': '离谱程度',
@@ -125,4 +124,124 @@ export default function CheckInPanel() {
                         max={format(new Date(), 'yyyy-MM-dd')}
                         style={{
                             background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(255,255,
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            borderRadius: '8px',
+                            color: '#E0E6ED',
+                            padding: '8px 12px',
+                            fontFamily: 'inherit',
+                            outline: 'none',
+                        }}
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={!hasAnyInput || submitting}
+                    style={{
+                        background: hasAnyInput && !submitting ? '#4ECDC4' : 'rgba(255,255,255,0.1)',
+                        color: hasAnyInput && !submitting ? '#050B14' : '#8892b0',
+                        border: 'none',
+                        padding: '10px 24px',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        cursor: hasAnyInput && !submitting ? 'pointer' : 'not-allowed',
+                        fontFamily: 'inherit',
+                    }}
+                >
+                    {submitting ? '保存中…' : '保存记录'}
+                </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {userInfo.keywords.map((keyword) => {
+                    const rec = records[keyword] || {};
+                    const subLabel = KEYWORD_LABELS[keyword];
+                    const placeholder = KEYWORD_PLACEHOLDERS[keyword] || '';
+                    return (
+                        <motion.div
+                            key={keyword}
+                            layout
+                            style={{
+                                padding: '20px',
+                                borderRadius: '12px',
+                                background: 'rgba(0,0,0,0.25)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                borderLeft: `4px solid ${getScoreColor(rec.quality)}`,
+                            }}
+                        >
+                            <div style={{ marginBottom: '12px' }}>
+                                <h3 style={{ margin: '0 0 4px 0', color: '#4ECDC4', fontSize: '18px' }}>{keyword}</h3>
+                                {subLabel && (
+                                    <span style={{ fontSize: '13px', color: '#8892b0' }}>{subLabel}</span>
+                                )}
+                            </div>
+
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#8892b0', marginBottom: '6px' }}>
+                                    能量值 (0–10)
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="10"
+                                    step="1"
+                                    value={rec.quality !== undefined ? rec.quality : 5}
+                                    onChange={(e) => handleQualityChange(keyword, e.target.value)}
+                                    style={{ width: '100%' }}
+                                />
+                                <div style={{ fontSize: '12px', color: '#8892b0', marginTop: '4px' }}>
+                                    当前：{rec.quality !== undefined ? rec.quality : '未选择（拖动滑块以记录）'}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#8892b0', marginBottom: '6px' }}>
+                                    备注
+                                </label>
+                                <textarea
+                                    value={rec.note || ''}
+                                    onChange={(e) => handleNoteChange(keyword, e.target.value)}
+                                    placeholder={placeholder}
+                                    rows={3}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        resize: 'vertical',
+                                        background: 'rgba(0,0,0,0.35)',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        borderRadius: '8px',
+                                        color: '#E0E6ED',
+                                        padding: '10px',
+                                        fontFamily: 'inherit',
+                                    }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#8892b0', marginBottom: '6px' }}>
+                                    图片链接（可选）
+                                </label>
+                                <input
+                                    type="text"
+                                    value={rec.imageUrl || ''}
+                                    onChange={(e) => handleImageUrlChange(keyword, e.target.value)}
+                                    placeholder="https://..."
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        background: 'rgba(0,0,0,0.35)',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        borderRadius: '8px',
+                                        color: '#E0E6ED',
+                                        padding: '10px',
+                                        fontFamily: 'inherit',
+                                    }}
+                                />
+                            </div>
+                        </motion.div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
