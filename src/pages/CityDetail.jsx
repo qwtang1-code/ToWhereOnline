@@ -33,11 +33,18 @@ export default function CityDetail({ cityName, goBack }) {
           .eq('city_id', cityData.id)
           .order('sort_order', { ascending: true });
 
+        // ========== 关键修复：把 main_image 也加入画廊 ==========
+        const galleryUrls = (imagesData || []).map(img => img.url);
+        if (cityData.main_image && !galleryUrls.includes(cityData.main_image)) {
+            galleryUrls.unshift(cityData.main_image);
+        }
+        // =======================================================
+
         setCurrentCity({
           id: cityData.id,
           mainImage: cityData.main_image || '',
           description: cityData.description || '',
-          gallery: (imagesData || []).map(img => img.url),
+          gallery: galleryUrls,
         });
       } catch (e) {
         console.error(e);

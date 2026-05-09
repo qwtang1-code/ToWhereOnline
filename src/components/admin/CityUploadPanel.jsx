@@ -124,14 +124,27 @@ export default function CityUploadPanel({ onCityCreated, githubToken }) {
 
         let result;
         if (editingCityId) {
-            result = await supabase.from('cities').update(cityPayload).eq('id', editingCityId);
+            result = await supabase.from('cities').update(cityPayload).eq('id', editingCityId).select();
         } else {
-            result = await supabase.from('cities').insert(cityPayload);
+            result = await supabase.from('cities').insert(cityPayload).select();
         }
 
         if (result.error) {
             setUploadMessage('保存失败：' + result.error.message);
         } else {
+            // ========== 关键修复：同时把图片写入 city_images 表 ==========
+            if (mainImage) {
+                const cityId = editingCityId || result.data?.[0]?.id;
+                if (cityId) {
+                    await supabase.from('city_images').insert({
+                        city_id: cityId,
+                        url: mainImage,
+                        sort_order: 0
+                    });
+                }
+            }
+            // ==========================================================
+            
             setUploadMessage(editingCityId ? '城市更新成功！' : '城市添加成功！');
             setCityName(''); setLat(''); setLng(''); setVisitDate(''); setDeparture(''); setMainImage(null);
             setEditingCityId(null);
