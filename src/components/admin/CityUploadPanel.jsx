@@ -156,6 +156,7 @@ export default function CityUploadPanel({ onBack, onCityCreated }) {
             const existingFilesOnGitHub = auditRes.success ? auditRes.files : [];
 
             const finalUrls = [];
+            const failedUploads = [];
 
             // 2. Process images
             for (let i = 0; i < images.length; i++) {
@@ -163,9 +164,12 @@ export default function CityUploadPanel({ onBack, onCityCreated }) {
                 setUploadProgress(Math.floor(10 + (i / images.length) * 70));
 
                 if (img.status === 'done' && img.cdnUrl) {
+                    console.log(`[CityUpload] 图片 ${i} 已存在 CDN URL:`, img.cdnUrl);
                     finalUrls.push(img.cdnUrl);
                     continue;
                 }
+
+                console.log(`[CityUpload] 正在处理图片 ${i}:`, img.file?.name, `大小:`, img.file?.size);
 
                 const compressed = await imageCompression(img.file, { maxSizeMB: 1, maxWidthOrHeight: 1920 });
                 const base64 = await new Promise(r => {
@@ -174,13 +178,28 @@ export default function CityUploadPanel({ onBack, onCityCreated }) {
                     reader.readAsDataURL(compressed);
                 });
 
+                console.log(`[CityUpload] 图片 ${i} 压缩后 base64 长度:`, base64?.length);
+
                 const fileName = `${Date.now()}_${i}_${img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
                 const path = `${folderPath}/${fileName}`;
 
+                console.log(`[CityUpload] 上传图片 ${i} 到路径:`, path);
+
                 const res = await uploadFileToGitHub(path, base64, `Upload: ${cityName}/${fileName}`);
                 if (res.success) {
+                    console.log(`[CityUpload] 图片 ${i} 上传成功:`, res.url);
                     finalUrls.push(res.url);
+                } else {
+                    console.error(`[CityUpload] 图片 ${i} 上传失败:`, res.error);
+                    failedUploads.push({ fileName: img.file?.name || `图片${i + 1}`, error: res.error || '上传失败' });
                 }
+            }
+
+            console.log('[CityUpload] 上传结果:', { total: images.length, success: finalUrls.length, failed: failedUploads.length });
+
+            if (failedUploads.length > 0) {
+                const errorMessages = failedUploads.map(f => `${f.fileName}: ${f.error}`).join('; ');
+                throw new Error(`以下图片上传失败: ${errorMessages}`);
             }
 
             // 3. Update Supabase
